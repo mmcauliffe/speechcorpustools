@@ -34,28 +34,28 @@ class SpectralPlotWidget(SelectablePlotWidget):
         self.play_time_line.visible = True
 
     def set_pitch(self, pitch):
-        if not pitch:
+        factor = 125 / 600
+        data = []
+        for i,(t, p) in enumerate(pitch):
+            if p <= 0:
+                continue
+            if i <= 0:
+                continue
+            if pitch[i-1][1] <= 0:
+                continue
+            p = p * factor
+            t = t * self.spec.xscale
+            prev_p = pitch[i-1]
+            prev_p = [prev_p[0] * self.spec.xscale, prev_p[1] * factor]
+            data.append(prev_p)
+            data.append([t, p])
+        data = np.array(data)
+        if data.shape[0] == 0:
             self.pitchplot._bounds = None
             self.pitchplot._changed['pos'] = True
             self.pitchplot._pos = None
             self.pitchplot.update()
         else:
-            factor = 125 / 600
-            data = []
-            for i,(t, p) in enumerate(pitch):
-                if p <= 0:
-                    continue
-                if i <= 0:
-                    continue
-                if pitch[i-1][1] <= 0:
-                    continue
-                p = p * factor
-                t = t * self.spec.xscale
-                prev_p = pitch[i-1]
-                prev_p = [prev_p[0] * self.spec.xscale, prev_p[1] * factor]
-                data.append(prev_p)
-                data.append([t, p])
-            data = np.array(data)
             self.pitchplot.set_data(pos = data)
 
     def set_formants(self, formants):
@@ -79,7 +79,6 @@ class SpectralPlotWidget(SelectablePlotWidget):
                     data.append([t, f])
                 data = np.array(data)
                 self.formantplots[k].set_data(pos = data)
-
 
     def set_sampling_rate(self, sr):
         self.spec.set_sampling_rate(sr)
