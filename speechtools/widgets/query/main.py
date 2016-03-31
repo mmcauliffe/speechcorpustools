@@ -104,6 +104,7 @@ class QueryForm(QtWidgets.QWidget):
                     if ('tense_sound', str) in c.hierarchy.type_properties[w_type.type]:
                         columns.append(w_type.tense_sound.column_name('Underlying_tense_sound'))
                     columns.append(a_type.previous.label.column_name('Previous_segment'))
+                    columns.append(a_type.following.duration.column_name('Following_pause_duration'))
                 if 'burst' in c.hierarchy.subannotations[c.hierarchy.lowest]:
                     columns.extend([a_type.burst.begin.column_name('Burst_begin'),
                             a_type.burst.end.column_name('Burst_end'),
