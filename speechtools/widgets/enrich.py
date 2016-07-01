@@ -5,7 +5,7 @@ from PyQt5 import QtGui, QtCore, QtWidgets
 
 from polyglotdb import CorpusContext
 
-from .base import RadioSelectWidget
+from .base import RadioSelectWidget, BaseSummaryWidget
 
 from .lexicon import WordSelectWidget
 
@@ -341,3 +341,182 @@ class EncodeHierarchicalPropertiesDialog(BaseDialog):
         return {'higher': self.higherSelect.currentText(), 'type':self.typeSelect.currentText(),
                 'lower': lower, 'subset': subset, 'name': self.nameEdit.text()}
 
+class EncodeLabel(QtWidgets.QWidget):
+    toEncode = QtCore.pyqtSignal(str)
+    def __init__(self, annotation_type, parent = None):
+        super(EncodeLabel, self).__init__(parent)
+
+        self.annotation_type = annotation_type
+
+        layout = QtWidgets.QVBoxLayout()
+
+        self.label = QtWidgets.QLabel(self.annotation_type.title() + 's')
+        layout.addWidget(self.label)
+
+        self.enrichButton = QtWidgets.QToolButton()
+        self.enrichButton.setText('Enrich')
+        self.enrichButton.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+
+        self.enrichButton.setEnabled(False)
+
+        #self.encodeButton.clicked.connect(self.toEncode.emit)
+
+        layout.addWidget(self.enrichButton)
+
+        self.setLayout(layout)
+
+
+    def updateEnrichMenu(self, config):
+        menu = QtWidgets.QMenu()
+        if config is not None:
+            self.enrichButton.setEnabled(True)
+            with CorpusContext(config) as c:
+                if self.annotation_type == 'non-speech element':
+                    t = 'Encode non-speech elements'
+                    if c.hierarchy.has_token_subset(c.word_name, 'pause'):
+                        t = 'Re-encode non-speech elements'
+                    pauseAction = QtWidgets.QAction(t, self)
+                    pauseAction.triggered.connect(lambda : self.toEncode.emit('pause'))
+                    menu.addAction(pauseAction)
+                elif self.annotation_type not in [c.phone_name, c.word_name]:
+                    t = 'Encode'
+                    if self.annotation_type in c.hierarchy.annotation_types:
+                        t = 'Re-encode'
+                    encodeAction = QtWidgets.QAction(t, self)
+                    encodeAction.triggered.connect(lambda : self.toEncode.emit(self.annotation_type))
+                    menu.addAction(encodeAction)
+                elif self.annotation_type == c.word_name:
+                    lexiconAction = QtWidgets.QAction('Enrich lexicon', self)
+                    lexiconAction.triggered.connect(lambda : self.toEncode.emit('lexicon'))
+                    menu.addAction(lexiconAction)
+                else:
+                    t = 'Encode syllabic segments'
+                    if c.hierarchy.has_type_subset(c.phone_name, 'syllabic'):
+                        t = 'Re-encode syllabic segments'
+                    syllabicsAction = QtWidgets.QAction(t, self)
+                    syllabicsAction.triggered.connect(lambda : self.toEncode.emit('syllabic'))
+                    menu.addAction(syllabicsAction)
+                    classAction = QtWidgets.QAction('Encode phone subsets (classes)', self)
+                    classAction.triggered.connect(lambda : self.toEncode.emit('class'))
+                    menu.addAction(classAction)
+                    inventoryAction = QtWidgets.QAction('Enrich phonological inventory', self)
+                    inventoryAction.triggered.connect(lambda : self.toEncode.emit('inventory'))
+                    menu.addAction(inventoryAction)
+        else:
+            self.enrichButton.setEnabled(False)
+        self.enrichButton.setMenu(menu)
+
+
+class PropertySummaryWidget(QtWidgets.QWidget):
+    def __init__(self, property_name, parent = None):
+        super(PropertySummaryWidget, self).__init__(parent)
+
+        layout = QtWidgets.QFormLayout()
+
+        layout.addRow(QtWidgets.QLabel(property_name))
+
+        self.setLayout(layout)
+
+class AnnotationSummaryWidget(QtWidgets.QWidget):
+    def __init__(self, annotation_type, parent = None):
+        super(AnnotationSummaryWidget, self).__init__(parent)
+        self.annotation_type = annotation_type
+
+        layout = QtWidgets.QHBoxLayout()
+
+        self.unknownWidget = QtWidgets.QLabel('Please connect to a server and select a corpus.')
+
+        self.setLayout(layout)
+
+    def updateConfig(self, config):
+        while self.layout().count():
+            item = self.layout().takeAt(0)
+            if item is not None:
+                w = item.widget()
+                w.setParent(None)
+                if w != self.unknownWidget:
+                    w.deleteLater()
+        if config is None:
+            self.layout().addWidget(self.unknownWidget)
+        else:
+            with CorpusContext(config) as c:
+                if self.annotation_type in c.hierarchy.annotation_types:
+                    props = (c.hierarchy.type_properties[self.annotation_type] |
+                            c.hierarchy.token_properties[self.annotation_type])
+                    for p, t in sorted(props):
+                        if p == 'id':
+                            continue
+                        w = PropertySummaryWidget(p)
+                        self.layout().addWidget(w)
+                else:
+                    lab = 'This annotation type is not encoded.'
+                    if self.annotation_type == 'syllable' and \
+                            not c.hierarchy.has_type_subset(c.phone_name, 'syllabic'):
+                        lab += '\nSyllabic phones must be encoded before syllables can be encoded.'
+                    elif self.annotation_type == 'utterance' and \
+                            not c.hierarchy.has_token_subset(c.word_name, 'pause'):
+                        lab += '\nNon-speech elements must be encoded before utterances can be encoded.'
+                    self.layout().addWidget(QtWidgets.QLabel(lab))
+
+
+class EnrichmentWidget(QtWidgets.QWidget):
+    def __init__(self, annotation_type, parent = None):
+        super(EnrichmentWidget, self).__init__(parent)
+        self.annotation_type = annotation_type
+
+        layout = QtWidgets.QHBoxLayout()
+
+        self.label = EncodeLabel(self.annotation_type)
+
+        self.summary = AnnotationSummaryWidget(self.annotation_type)
+
+        layout.addWidget(self.label)
+
+        layout.addWidget(self.summary)
+
+        self.setLayout(layout)
+
+    def updateConfig(self, config):
+        self.summary.updateConfig(config)
+        self.label.updateEnrichMenu(config)
+
+class PauseWidget(EnrichmentWidget):
+    def __init__(self, parent = None):
+        super(PauseWidget, self).__init__('non-speech element', parent)
+
+class EnrichmentSummaryWidget(BaseSummaryWidget):
+    def __init__(self, parent = None):
+        super(EnrichmentSummaryWidget, self).__init__(parent)
+
+
+        layout = QtWidgets.QVBoxLayout()
+        self.mainLayout = QtWidgets.QVBoxLayout()
+        self.mainLayout.setSpacing(0)
+        self.mainLayout.setContentsMargins(0,0,0,0)
+        self.mainLayout.setAlignment(QtCore.Qt.AlignTop)
+        mainWidget = QtWidgets.QWidget()
+
+        mainWidget.setSizePolicy(QtWidgets.QSizePolicy.Preferred,QtWidgets.QSizePolicy.Preferred)
+        mainWidget.setLayout(self.mainLayout)
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(mainWidget)
+        scroll.setMinimumHeight(10)
+        scroll.setSizePolicy(QtWidgets.QSizePolicy.Preferred,QtWidgets.QSizePolicy.Preferred)
+        policy = scroll.sizePolicy()
+        policy.setVerticalStretch(1)
+        scroll.setSizePolicy(policy)
+        layout.addWidget(scroll)
+
+        self.pauseWidget = PauseWidget()
+
+        self.mainLayout.addWidget(self.pauseWidget)
+
+        for k in ['utterance', 'word', 'syllable', 'phone']:
+            self.mainLayout.addWidget(EnrichmentWidget(k))
+
+        self.setLayout(layout)
+
+    def refresh(self):
+        for i in range(self.mainLayout.count()):
+            self.mainLayout.itemAt(i).widget().updateConfig(self.config)

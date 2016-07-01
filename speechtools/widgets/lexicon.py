@@ -1,6 +1,8 @@
 
 from PyQt5 import QtGui, QtCore, QtWidgets
 
+from .base import BaseSummaryWidget
+
 class RegexWidget(QtWidgets.QWidget):
     def __init__(self, config, parent = None):
         super(RegexWidget, self).__init__(parent)
@@ -33,3 +35,6 @@ class WordSelectWidget(QtWidgets.QWidget):
 
     def value(self):
         return self.regexWidget.value()
+
+class LexiconWidget(BaseSummaryWidget):
+    pass

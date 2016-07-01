@@ -3,6 +3,8 @@ from PyQt5 import QtGui, QtCore, QtWidgets
 
 from polyglotdb import CorpusContext
 
+from .base import BaseSummaryWidget
+
 class PhoneSubsetSelectWidget(QtWidgets.QWidget):
     def __init__(self, config, parent = None):
         super(PhoneSubsetSelectWidget, self).__init__(parent)
@@ -45,4 +47,7 @@ class PhoneSelectWidget(QtWidgets.QWidget):
     def value(self):
         phones = [x.text() for x in self.selectWidget.selectedItems()]
         return phones
+
+class InventoryWidget(BaseSummaryWidget):
+    pass
 
