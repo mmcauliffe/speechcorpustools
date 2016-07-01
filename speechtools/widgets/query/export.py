@@ -10,6 +10,8 @@ from ...profiles import available_export_profiles, ExportProfile, Column
 
 from .basic import AttributeSelect as QueryAttributeSelect, SpeakerAttributeSelect
 
+import collections
+
 class PauseSelect(QueryAttributeSelect):
     def __init__(self):
         QtWidgets.QComboBox.__init__(self)
@@ -367,6 +369,7 @@ class BasicColumnBox(QtWidgets.QGroupBox):
             if name == '':
                 continue
             labelposition = self.names.index(name)/self.numcolumns
+
             if labelposition != int(labelposition) and name != 'discourse' and name != 'speaker':
                 widget = QtWidgets.QCheckBox(name)
                 widget.setMinimumSize(175, 35)
@@ -521,7 +524,6 @@ class BasicColumnBox(QtWidgets.QGroupBox):
 class ColumnBox(QtWidgets.QGroupBox):
     checkboxToUncheck = QtCore.pyqtSignal(object)
     exportHelpBroadcast = QtCore.pyqtSignal(object)
-
     def __init__(self, hierarchy, to_find):
         super(ColumnBox, self).__init__('Columns')
         self.hierarchy = hierarchy
@@ -687,6 +689,8 @@ class ExportProfileDialog(QtWidgets.QDialog):
 
             self.toFindWidget.currentIndexChanged.connect(self.updateToFind)
 
+        #self.BasicFilterBox = BasicFilterBox(hierarchy, to_find)
+
         layout = QtWidgets.QFormLayout()
         mainlayout = QtWidgets.QVBoxLayout()
         layout.addRow('Linguistic objects to find', self.toFindWidget)
@@ -711,7 +715,6 @@ class ExportProfileDialog(QtWidgets.QDialog):
         self.cancelButton.clicked.connect(self.reject)
 
         self.columnWidget.exportHelpBroadcast.connect(self.exportHelpBroadcast.emit)
-
 
         aclayout.addWidget(self.acceptButton)
         aclayout.addWidget(self.saveButton)
