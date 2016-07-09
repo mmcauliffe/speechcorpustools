@@ -2,8 +2,8 @@
 
 
 if [ `uname` == Darwin ]; then
-    pyinstaller --clean -y \
-        --additional-hooks-dir=freezing\hooks \
+    pyinstaller -w --clean -y \
+        --additional-hooks-dir=freezing/hooks \
         --exclude-module matplotlib \
         --exclude-module tkinter \
         --exclude-module pygments \
@@ -11,6 +11,7 @@ if [ `uname` == Darwin ]; then
         --exclude-module sphinx \
         --exclude-module docutils \
         --exclude-module scikits.samplerate \
+        --hidden-import setuptools \
         speechtools/command_line/sct.py
 
 fi
