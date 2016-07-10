@@ -1,12 +1,6 @@
-******************************************
-Speech Corpus Tools: Tutorial and examples
-******************************************
+.. _installation_tutorial:
 
-
-
-.. _installation:
-
-Installation Setup
+Tutorial: Installation Setup
 ##################
 
 .. _PGDB website: http://montrealcorpustools.github.io/PolyglotDB/
@@ -14,15 +8,15 @@ Installation Setup
 .. _GitHub repository: https://https://github.com/mmcauliffe/speechcorpustools
 
 This document assumes the following:
- 
+
  * Neo4j is installed
  * Speech Corpus Tools is installed
- * You have a database for the Buckeye Corpus on your local machine.
+ * You have a database for the Librispeech Test Corpus on your local machine.
 
 Installing Neo4j
 *********************
 
-SCT currently requires that Neo4j version 2.3.3 be installed locally and running.  To install Neo4j, please use the following links.
+SCT currently requires that Neo4j version 3.0 be installed locally and running.  To install Neo4j, please use the following links.
 
 Mac version: `Mac <http://info.neotechnology.com/download-thanks.html?edition=community&release=2.3.3&flavour=dmg>`_
 
@@ -42,6 +36,6 @@ and save the file.  Neo4j should be ready to use.
 
 If security is enabled, you'll first have to click on the link in the Neo4j server (when it's running) that says ``localhost:7474`` which will take you to a browser page where you can set a password for the ``neo4j`` user.  If you leave it enabled, remember your password for when you connect via Speech Corpus Tools.
 
-`Next <http://sct.readthedocs.io/en/latest/tutorial/installation2.html>`_ 			`Previous <http://sct.readthedocs.io/en/latest/tutorial/tutorial.html>`_
+:ref:`Next <installation2>`          :ref:`Previous <tutintroduction>`
 
 
