@@ -83,9 +83,7 @@ class ExportWidget(QtWidgets.QWidget):
     def beginExport(self):
         a = self.sender()
         name = a.text()
-        if name == 'Basic columns':
-            name = 'basic'
-        elif name == 'New export profile':
+        if name == 'New export profile':
             name = 'new'
         self.setDisabled(True)
         self.exportButton.setText('Exporting...')
@@ -101,9 +99,6 @@ class ExportWidget(QtWidgets.QWidget):
         newAction = QtWidgets.QAction('New export profile', self)
         newAction.triggered.connect(self.beginExport)
         menu.addAction(newAction)
-        basicAction = QtWidgets.QAction('Basic columns', self)
-        basicAction.triggered.connect(self.beginExport)
-        menu.addAction(basicAction)
         profiles = available_export_profiles()
         for p in profiles:
             act = QtWidgets.QAction(p, self)
@@ -155,6 +150,8 @@ class QueryForm(QtWidgets.QWidget):
     def __init__(self):
         super(QueryForm, self).__init__()
         self.config = None
+        #self.hierarchy = hierarchy
+        #self.to_find = to_find
 
         mainLayout = QtWidgets.QVBoxLayout()
         headerLayout = QtWidgets.QHBoxLayout()
@@ -162,7 +159,6 @@ class QueryForm(QtWidgets.QWidget):
         mainLayout.setContentsMargins(10,0,10,0)
 
         self.queryWidget = BasicQuery()
-
 
         self.profileWidget = QueryProfileWidget()
         self.profileWidget.profileSelected.connect(self.queryWidget.updateProfile)
@@ -218,8 +214,6 @@ class QueryForm(QtWidgets.QWidget):
 
     def exportQuery(self, profile_name):
         if self.config is None:
-            return
-        if profile_name == 'basic':
             return
 
         dialog = ExportProfileDialog(self.config, self.currentProfile().to_find, self)

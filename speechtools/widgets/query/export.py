@@ -8,7 +8,9 @@ from polyglotdb import CorpusContext
 
 from ...profiles import available_export_profiles, ExportProfile, Column
 
-from .basic import AttributeSelect as QueryAttributeSelect, SpeakerAttributeSelect
+from .basic import AttributeSelect as QueryAttributeSelect, SpeakerAttributeSelect, DiscourseAttributeSelect
+
+import collections
 
 class PauseSelect(QueryAttributeSelect):
     def __init__(self):
@@ -116,10 +118,15 @@ class AttributeWidget(QtWidgets.QWidget):
             widget = AttributeSelect(self.hierarchy, current_annotation_type)
             widget.currentIndexChanged.connect(self.updateAttribute)
             self.mainLayout.addWidget(widget)
-        elif combobox.currentText() in ['speaker', 'discourse']:
+        elif combobox.currentText() == 'speaker':
             widget = SpeakerAttributeSelect(self.hierarchy)
             widget.currentIndexChanged.connect(self.updateAttribute)
             self.mainLayout.addWidget(widget)
+        elif combobox.currentText() == 'discourse':
+            widget = DiscourseAttributeSelect(self.hierarchy)
+            widget.currentIndexChanged.connect(self.updateAttribute)
+            self.mainLayout.addWidget(widget)
+
         self.finalChanged.emit('_'.join(self.attribute()[1:]))
 
     def annotationType(self):
@@ -243,6 +250,7 @@ class BasicColumnBox(QtWidgets.QGroupBox):
         self.checked = []
 
         hierarchydict = collections.OrderedDict()
+
         for i in sorted(hierarchy.annotation_types):
             properties = []
             for j in sorted(hierarchy.token_properties[i]):
@@ -252,7 +260,12 @@ class BasicColumnBox(QtWidgets.QGroupBox):
                     if k[0] != 'id' and k[0] not in properties:
                         properties.append(k[0])
             hierarchydict[i] = properties
-
+        for i in hierarchydict.values():
+            i.append('duration')
+        hierarchydict['speaker'] = []
+        
+        for i in hierarchy.speaker_properties:
+            hierarchydict['speaker'].append(i[0])
         dictlengths = []
         for key in hierarchydict:
             dictlengths.append(len(hierarchydict[key]))
@@ -272,43 +285,12 @@ class BasicColumnBox(QtWidgets.QGroupBox):
         self.names.append('discourse')
         for i in range(self.maxboxes):
             self.names.append('')
-        self.names.append('speaker')
+        #self.names.append('speaker')
 
         self.complexnames = ['syllable position of previous phone', 'duration of the second syllable after the current one']
 
         self.positions = [(i, j) for i in range(len(hierarchydict)+2) for j in range(self.numcolumns)]
         self.positions2 = [(i, j) for i in range(2) for j in range(1)]
-
-        '''self.grid = QtWidgets.QGridLayout()
-        layout = QtWidgets.QVBoxLayout()
-        self.mainLayout = QtWidgets.QVBoxLayout()
-        self.mainLayout.addLayout(self.grid)
-        self.mainLayout.setSpacing(0)
-        self.mainLayout.setContentsMargins(0,0,0,0)
-        self.mainLayout.setAlignment(QtCore.Qt.AlignTop)
-        mainWidget = QtWidgets.QWidget()
-
-        mainWidget.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding,QtWidgets.QSizePolicy.MinimumExpanding)
-        mainWidget.setLayout(self.mainLayout)
-        scroll = QtWidgets.QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(mainWidget)
-        scroll.setMinimumHeight(10)
-        scroll.setMinimumWidth(10)
-        scroll.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding,QtWidgets.QSizePolicy.MinimumExpanding)
-        policy = scroll.sizePolicy()
-        policy.setVerticalStretch(1)
-        scroll.setSizePolicy(policy)
-        layout.addWidget(scroll)
-
-        self.setLayout(layout)
-
-        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        policy = self.sizePolicy()
-        policy.setVerticalStretch(1)
-        self.setSizePolicy(policy)
-
-        self.initUI()'''
 
         self.tab_widget = QtWidgets.QTabWidget()
         self.tab1 = QtWidgets.QWidget()
@@ -347,8 +329,8 @@ class BasicColumnBox(QtWidgets.QGroupBox):
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(mainWidget)
-        scroll.setMinimumHeight(10)
-        scroll.setMinimumWidth(10)
+        scroll.setMinimumHeight(150)
+        scroll.setMaximumHeight(150)
         scroll.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding,QtWidgets.QSizePolicy.MinimumExpanding)
         policy = scroll.sizePolicy()
         policy.setVerticalStretch(1)
@@ -367,11 +349,12 @@ class BasicColumnBox(QtWidgets.QGroupBox):
             if name == '':
                 continue
             labelposition = self.names.index(name)/self.numcolumns
-            if labelposition != int(labelposition) and name != 'discourse' and name != 'speaker':
+
+            if labelposition != int(labelposition) and name != 'discourse': #and name != 'speaker'
                 widget = QtWidgets.QCheckBox(name)
                 widget.setMinimumSize(175, 35)
                 widget.toggled.connect(self.addColumn)
-            elif name == 'discourse' or name == 'speaker':
+            elif name == 'discourse': # or name == 'speaker'
                 widget = QtWidgets.QCheckBox(name)
                 widget.setMinimumSize(175, 35)
                 widget.toggled.connect(self.addColumn)
@@ -521,7 +504,6 @@ class BasicColumnBox(QtWidgets.QGroupBox):
 class ColumnBox(QtWidgets.QGroupBox):
     checkboxToUncheck = QtCore.pyqtSignal(object)
     exportHelpBroadcast = QtCore.pyqtSignal(object)
-
     def __init__(self, hierarchy, to_find):
         super(ColumnBox, self).__init__('Columns')
         self.hierarchy = hierarchy
@@ -597,7 +579,7 @@ class ColumnBox(QtWidgets.QGroupBox):
                 defaultwidget2 = widget.attributeWidget.mainLayout.itemAt(1).widget()
                 index2 = defaultwidget2.findText(label[1])
                 defaultwidget2.setCurrentIndex(index2)
-            if defaultwidget.currentText() == 'discourse' or defaultwidget.currentText() == 'speaker':
+            if defaultwidget.currentText() == 'discourse': # or defaultwidget.currentText() == 'speaker'
                 defaultwidget2 = widget.attributeWidget.mainLayout.itemAt(1).widget()
                 index2 = defaultwidget2.findText('name')
                 defaultwidget2.setCurrentIndex(index2)
@@ -616,14 +598,14 @@ class ColumnBox(QtWidgets.QGroupBox):
             for i in range(len(self.mainLayout)):
                 match = self.mainLayout.itemAt(i)
                 checkdefault = match.widget().attributeWidget.mainLayout.itemAt(0).widget().currentText()
-                if len(label) == 3 and label[0] != 'discourse' and label[0] != 'speaker':
+                if len(label) == 3 and label[0] != 'discourse': # and label[0] != 'speaker'
                     if checkdefault == label[0]:
                         unchecked.append(match.widget())
                 if len(label) == 4 and match.widget().attributeWidget.mainLayout.itemAt(1) != None:
                     checkdefault2 = match.widget().attributeWidget.mainLayout.itemAt(1).widget().currentText()
                     if checkdefault2 == label[1] and checkdefault == label[0]:
                         unchecked.append(match.widget())
-                if label[0] == 'discourse' or label[0] == 'speaker':
+                if label[0] == 'discourse': # or label[0] == 'speaker'
                     if checkdefault == label[0]:
                         unchecked.append(match.widget())
         if len(label) > 4:
@@ -687,14 +669,18 @@ class ExportProfileDialog(QtWidgets.QDialog):
 
             self.toFindWidget.currentIndexChanged.connect(self.updateToFind)
 
+        #self.BasicFilterBox = BasicFilterBox(hierarchy, to_find)
+
         layout = QtWidgets.QFormLayout()
         mainlayout = QtWidgets.QVBoxLayout()
         layout.addRow('Linguistic objects to find', self.toFindWidget)
 
         self.BasicColumnBox = BasicColumnBox(hierarchy, to_find)
+        self.BasicColumnBox.setMaximumHeight(250)
         layout.addRow(self.BasicColumnBox)
 
         self.columnWidget = ColumnBox(hierarchy, to_find)
+
         layout.addRow(self.columnWidget)
         self.BasicColumnBox.columnToAdd.connect(self.columnWidget.fillInColumn)
         self.columnWidget.checkboxToUncheck.connect(self.BasicColumnBox.uncheck)
@@ -711,7 +697,6 @@ class ExportProfileDialog(QtWidgets.QDialog):
         self.cancelButton.clicked.connect(self.reject)
 
         self.columnWidget.exportHelpBroadcast.connect(self.exportHelpBroadcast.emit)
-
 
         aclayout.addWidget(self.acceptButton)
         aclayout.addWidget(self.saveButton)

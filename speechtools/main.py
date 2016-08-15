@@ -1,4 +1,5 @@
 import os
+import shutil
 import pickle
 
 from PyQt5 import QtGui, QtCore, QtWidgets
@@ -21,7 +22,7 @@ from .widgets.enrich import (EncodePauseDialog, EncodeUtteranceDialog,
                             AnalyzeAcousticsDialog, EncodeSyllabicsDialog,
                             EncodePhoneSubsetDialog, EncodeSyllablesDialog,
                             EnrichLexiconDialog, EnrichFeaturesDialog,
-                            EncodeHierarchicalPropertiesDialog)
+                            EncodeHierarchicalPropertiesDialog, EncodeRelativizedMeasuresDialog, EnrichSpeakersDialog, EncodeStressDialog)
 
 from .helper import get_system_font_height
 
@@ -33,7 +34,8 @@ from .workers import (AcousticAnalysisWorker, ImportCorpusWorker,
                     SyllabicEncodingWorker, PhoneSubsetEncodingWorker,
                     SyllableEncodingWorker, LexiconEnrichmentWorker,
                     FeatureEnrichmentWorker, HierarchicalPropertiesWorker,
-                    QueryWorker, ExportQueryWorker)
+                    QueryWorker, ExportQueryWorker, RelativizedMeasuresWorker,
+                     SpeakerEnrichmentWorker, StressEncodingWorker)
 
 sct_config_pickle_path = os.path.join(BASE_DIR, 'config')
 
@@ -71,6 +73,7 @@ class LeftPane(Pane):
 
     def changeDiscourse(self, discourse, begin = None, end = None):
         self.viewWidget.changeDiscourse(discourse, begin, end)
+
 
 
 class RightPane(Pane):
@@ -129,6 +132,9 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
         #vispy.sys_info(os.path.join(BASE_DIR, 'vispy.info'), overwrite = True)
         self.corpusConfig = None
+        pesky = os.path.expanduser('~/.neo4j')
+        if os.path.exists(pesky):
+            shutil.rmtree(pesky, ignore_errors = True)
 
         self.leftPane = LeftPane()
         self.configUpdated.connect(self.leftPane.updateConfig)
@@ -140,6 +146,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.rightPane.connectWidget.corporaHelpBroadcast.connect(self.rightPane.helpWidget.getConnectionHelp)
 
+
         self.leftPane.viewWidget.discourseWidget.nextRequested.connect(self.leftPane.queryWidget.requestNext)
         self.leftPane.viewWidget.discourseWidget.previousRequested.connect(self.leftPane.queryWidget.requestPrevious)
         self.leftPane.viewWidget.discourseWidget.markedAsAnnotated.connect(self.leftPane.queryWidget.markAnnotated)
@@ -149,10 +156,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.leftPane.queryWidget.needsHelp.connect(self.rightPane.helpWidget.getHelpInfo)
         self.leftPane.queryWidget.queryForm.queryToRun.connect(self.runQuery)
         self.leftPane.queryWidget.queryForm.queryToExport.connect(self.exportQuery)
-
         self.leftPane.queryWidget.exportHelpBroadcast.connect(self.rightPane.helpPopup.exportHelp)
         self.enrichHelpBroadcast.connect(self.rightPane.helpWidget.getEnrichHelp)
         self.leftPane.viewWidget.discourseWidget.discourseHelpBroadcast.connect(self.rightPane.helpWidget.getDiscourseHelp)
+        self.leftPane.queryWidget.queryForm.queryToRun.connect(self.runQuery)
+        self.leftPane.queryWidget.queryForm.queryToExport.connect(self.exportQuery)
 
         self.wrapper = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout()
@@ -230,9 +238,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.enrichFeaturesWorker.errorEncountered.connect(self.showError)
         self.enrichFeaturesWorker.dataReady.connect(self.updateStatus)
 
+        self.enrichSpeakersWorker = SpeakerEnrichmentWorker()
+        self.enrichSpeakersWorker.errorEncountered.connect(self.showError)
+        self.enrichSpeakersWorker.dataReady.connect(self.updateStatus)
+
+        self.encodeStressWorker = StressEncodingWorker()
+        self.encodeStressWorker.errorEncountered.connect(self.showError)
+        self.encodeStressWorker.dataReady.connect(self.updateStatus)
+
         self.hierarchicalPropertiesWorker = HierarchicalPropertiesWorker()
         self.hierarchicalPropertiesWorker.errorEncountered.connect(self.showError)
         self.hierarchicalPropertiesWorker.dataReady.connect(self.updateStatus)
+
+        self.relativizedMeasuresWorker = RelativizedMeasuresWorker()
+        self.relativizedMeasuresWorker.errorEncountered.connect(self.showError)
+        self.relativizedMeasuresWorker.dataReady.connect(self.updateStatus)
 
         self.rightPane.connectWidget.corporaList.cancelImporter.connect(self.importWorker.stop)
         self.rightPane.connectWidget.corporaList.corpusToImport.connect(self.importCorpus)
@@ -431,6 +451,18 @@ class MainWindow(QtWidgets.QMainWindow):
                 self,
                 statusTip="Batch analysis of formants and pitch for the current corpus", triggered=self.analyzeAcoustics)
 
+        self.encodeRelativizedMeasuresAct = QtWidgets.QAction("Encode Relativized Measures",
+            self,
+            statusTip="Calculate relatized measures such as mean, standard deviation, baseline duration", triggered=self.encodeRelativizedMeasures)
+
+        self.encodeStressAct = QtWidgets.QAction("Encode stress/tone",
+            self,
+            statusTip="just a test", triggered = self.encodeStress)
+
+        self.enrichSpeakersAct = QtWidgets.QAction("Enrich speakers...",
+            self,
+            statusTip="Enrich speakers from a CSV file", triggered=self.enrichSpeakers)
+
         self.enrichHelpAct = QtWidgets.QAction( "Help",
                 self,
                 statusTip="getHelp", triggered = self.getEnrichHelp) #, triggered=self.encodeUtterances
@@ -446,16 +478,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.enhancementMenu.addAction(self.encodeHierarchicalPropertiesAct)
         self.enhancementMenu.addAction(self.enrichLexiconAct)
         self.enhancementMenu.addAction(self.enrichFeaturesAct)
+        self.enhancementMenu.addAction(self.enrichSpeakersAct)
         self.enhancementMenu.addAction(self.syllabicsAct)
         self.enhancementMenu.addAction(self.syllablesAct)
         self.enhancementMenu.addAction(self.phoneSubsetAct)
         self.enhancementMenu.addAction(self.pausesAct)
         self.enhancementMenu.addAction(self.utterancesAct)
-
+        self.enhancementMenu.addAction(self.encodeStressAct)
         #self.enhancementMenu.addAction(self.speechRateAct)
         #self.enhancementMenu.addAction(self.utterancePositionAct)
+        self.enhancementMenu.addAction(self.encodeRelativizedMeasuresAct)
         self.enhancementMenu.addAction(self.analyzeAcousticsAct)
+
         self.enhancementMenu.addAction(self.enrichHelpAct)
+
 
     def specifyCorpus(self):
         pass
@@ -485,6 +521,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.progressWidget.createProgressBar('features', self.enrichFeaturesWorker)
             self.progressWidget.show()
             self.enrichFeaturesWorker.start()
+
+    def enrichSpeakers(self):
+        dialog = EnrichSpeakersDialog(self.corpusConfig, self)
+        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            path = dialog.value()
+            kwargs = {'config': self.corpusConfig,
+                        'path': path}
+            self.enrichSpeakersWorker.setParams(kwargs)
+            self.progressWidget.createProgressBar('speakers', self.enrichSpeakersWorker)
+            self.progressWidget.show()
+            self.enrichSpeakersWorker.start()
 
     def encodeSyllabics(self):
         dialog = EncodeSyllabicsDialog(self.corpusConfig, self)
@@ -553,8 +600,20 @@ class MainWindow(QtWidgets.QMainWindow):
             self.progressWidget.show()
             self.utteranceWorker.start()
 
-    def getEnrichHelp(self):
+    def encodeRelativizedMeasures(self):
+        dialog = EncodeRelativizedMeasuresDialog(self.corpusConfig, self)
+        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            measure = dialog.value()
 
+            kwargs = ({'config': self.corpusConfig,
+                        'measure': measure})
+            self.relativizedMeasuresWorker.setParams(kwargs)
+            self.progressWidget.createProgressBar('relativized', self.relativizedMeasuresWorker)
+            self.progressWidget.show()
+            self.relativizedMeasuresWorker.start()
+
+
+    def getEnrichHelp(self):
         self.enrichHelpBroadcast.emit()
 
     def speechRate(self):
@@ -597,5 +656,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.importWorker.start()
         self.updateStatus()
 
+    def encodeStress(self):
+
+        dialog = EncodeStressDialog(self.corpusConfig, self)
+        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            kwargs = {'config': self.corpusConfig, 'type':dialog.value()[0], 'regex':dialog.value()[1], 'full_regex':dialog.value()[2]}
+
+
+            self.encodeStressWorker.setParams(kwargs)
+            self.progressWidget.createProgressBar('stress', self.encodeStressWorker)
+            self.progressWidget.show()
+            self.encodeStressWorker.start()
     def createProgressBar(self, key, worker):
         self.progressWidget.createProgressBar(key, worker)

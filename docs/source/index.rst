@@ -9,14 +9,9 @@ Welcome to SpeechCorpusTools's documentation!
 Contents:
 
 .. toctree::
-      :maxdepth: 4
+   :maxdepth: 4
 
    introduction.rst
-   
-   importing.rst
-   queries.rst
-   apireference.rst
-
    tutorial/tutorial.rst
    additional/tour.rst
    additional/connecting.rst
@@ -24,10 +19,11 @@ Contents:
    additional/exporting.rst
    additional/viewingdiscourses.rst
    additional/viewingresults.rst
-   additional/exconnecting.rst
+   additional/exconnecting.rst	  
    additional/enrichment.rst
    additional/filters.rst
-   
+   additional/buildown.rst
+
 
 
 Indices and tables

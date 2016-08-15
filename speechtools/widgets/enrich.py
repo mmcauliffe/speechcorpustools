@@ -1,4 +1,6 @@
 
+import re
+
 from collections import OrderedDict
 
 from PyQt5 import QtGui, QtCore, QtWidgets
@@ -7,9 +9,9 @@ from polyglotdb import CorpusContext
 
 from .base import RadioSelectWidget, BaseSummaryWidget
 
-from .lexicon import WordSelectWidget
+from .lexicon import StressToneSelectWidget, WordSelectWidget
 
-from .inventory import PhoneSelectWidget, PhoneSubsetSelectWidget
+from .inventory import PhoneSelectWidget, PhoneSubsetSelectWidget, RegexPhoneSelectWidget
 
 class BaseDialog(QtWidgets.QDialog):
     def __init__(self, parent):
@@ -127,8 +129,9 @@ class AnalyzeAcousticsDialog(BaseDialog):
 
         self.acousticsWidget = RadioSelectWidget('Acoustics to encode',
                                             OrderedDict([
-                                            #('Probabilistic onsets and codas (language-independent)','probabilistic'),
-                                            ('Pitch','pitch'),]))
+                                            ('Pitch (REAPER)','pitch'),
+                                            #('Formants (LPC)','formants'),
+                                            ]))
 
         layout.addRow(self.acousticsWidget)
 
@@ -140,7 +143,6 @@ class AnalyzeAcousticsDialog(BaseDialog):
 class EncodeSyllabicsDialog(BaseDialog):
     def __init__(self, config, parent):
         super(EncodeSyllabicsDialog, self).__init__(parent)
-
         layout = QtWidgets.QFormLayout()
 
         self.phoneSelect = PhoneSelectWidget(config)
@@ -157,7 +159,6 @@ class EncodeSyllabicsDialog(BaseDialog):
         self.layout().insertLayout(0, layout)
 
         self.setWindowTitle('Encode syllabic segments')
-
     def value(self):
         return self.phoneSelect.value()
 
@@ -520,3 +521,168 @@ class EnrichmentSummaryWidget(BaseSummaryWidget):
     def refresh(self):
         for i in range(self.mainLayout.count()):
             self.mainLayout.itemAt(i).widget().updateConfig(self.config)
+
+class EncodeStressDialog(BaseDialog):
+    def __init__(self, config, parent):
+        super(EncodeStressDialog, self).__init__(parent)
+
+        self.config = config
+        layout = QtWidgets.QFormLayout()
+        self.stressTone = RadioSelectWidget('Type of enrichment',OrderedDict([('Tone','tone'),('Stress','stress')]))
+        self.stressToneSelectWidget = StressToneSelectWidget(config)
+
+        self.stressToneSelectWidget.vowelRegexWidget.regexEdit.setText("^[a-z][a-z0-9][a-z0-9]?[a-z0-9]?")
+        self.stressToneSelectWidget.regexWidget.regexEdit.setText("_T[0-9]$")
+        self.stressToneSelectWidget.regexWidget.testButton.clicked.connect(self.testRegex)
+        layout.addRow(self.stressTone)
+
+        self.stressTone.optionChanged.connect(self.change_view)
+
+        layout.addRow(self.stressToneSelectWidget)
+
+
+        self.resetButton = QtWidgets.QPushButton()
+        self.resetButton.setText('Reset')
+        self.resetButton.setSizePolicy(QtWidgets.QSizePolicy.Fixed,QtWidgets.QSizePolicy.Fixed)
+        self.resetButton.clicked.connect(self.reset)
+
+        layout.addRow(self.resetButton)
+        self.layout().insertLayout(0, layout)
+
+        self.setWindowTitle('Encode stress')
+
+    def change_view(self, text):
+        if text == 'stress':
+            self.stressToneSelectWidget.vowelRegexWidget.regexEdit.setText("^[A-Z][A-Z]")
+            self.stressToneSelectWidget.regexWidget.regexEdit.setText('[0-2]$')
+        elif text == 'tone':
+            self.stressToneSelectWidget.vowelRegexWidget.regexEdit.setText("^[a-z][a-z0-9][a-z0-9]?[a-z0-9]?")
+            self.stressToneSelectWidget.regexWidget.regexEdit.setText("_T[0-9]$")
+
+    def testRegex(self):
+        if isinstance(self.layout().itemAt(0),QtWidgets.QHBoxLayout):
+            self.layout().itemAt(0).setParent(None)
+        newLayout = QtWidgets.QHBoxLayout()
+
+        allphones = []
+
+        with CorpusContext(self.config) as c:
+        #   q = c.query_graph(c.phone).filter(c.phone.label.regex(self.stressToneSelectWidget.combo_value()))
+            statement = "MATCH (n:phone_type:{corpus}) return n.label as label".format(corpus = c.corpus_name)
+
+
+            results = c.execute_cypher(statement)
+            #for c in results.cursors:
+            for label in results:
+                    #phone_label = item[0].properties['label']
+                phone_label = label['label']
+                r = re.search(self.stressToneSelectWidget.regexWidget.regexEdit.text(), phone_label)
+                    #s = re.search(self.stressToneSelectWidget.vowelRegexWidget.regexEdit.text(), phone_label)
+                if r is not None:
+                    index = r.start(0)
+
+                    allphones.append((phone_label,index))
+            allphones =set(allphones)
+            allphones=list(allphones)
+            data = OrderedDict([
+            ('stripped vowel', []),
+            ('whole vowel', []),
+            ('ending', [])])
+            data.update({"whole vowel":[]})
+            data.update({"stripped vowel":[]})
+            data.update({"ending":[]})
+            for tup in allphones:
+                data['whole vowel'].append(tup[0])
+                data['stripped vowel'].append(tup[0][:tup[1]])
+                data['ending'].append(tup[0][tup[1]:])
+            regexPhoneSelect = RegexPhoneSelectWidget(data, 3,len(allphones))
+
+            newLayout.addWidget(regexPhoneSelect)
+        self.layout().insertLayout(0, newLayout)
+    def value(self):
+        return (self.stressTone.value(), self.stressToneSelectWidget.value(), self.stressToneSelectWidget.combo_value())
+
+    def reset(self):
+        with CorpusContext(self.config) as c:
+            c.reset_to_old_label()
+
+
+
+class EncodeRelativizedMeasuresDialog(BaseDialog):
+    def __init__(self, config, parent):
+        super(EncodeRelativizedMeasuresDialog, self).__init__(parent)
+
+        layout = QtWidgets.QFormLayout()
+
+        self.optionWidget = QtWidgets.QComboBox(self)
+        self.optionWidget.addItem("Word")
+        self.optionWidget.addItem("Phone")
+        self.optionWidget.addItem("Speaker")
+        with CorpusContext(config) as c:
+            if c.hierarchy.has_type_subset(c.phone_name, 'syllabic'):
+                self.optionWidget.addItem("Syllable")
+
+        self.optionWidget.currentTextChanged.connect(self.change_view)
+        layout.addWidget(self.optionWidget)
+
+        self.radioWidget = RadioSelectWidget('Desired measure:', OrderedDict([
+            ('Word Mean Duration', 'word_mean_duration'),
+            ('Word Median Duration', 'word_median'),
+            ('Word Standard Deviation','word_std_dev'),
+            ('Baseline Duration', 'baseline_duration')]))
+        layout.addWidget(self.radioWidget)
+
+        self.layout().insertLayout(0, layout)
+
+    def change_view(self, text):
+        layout = QtWidgets.QFormLayout()
+        self.radioWidget.setParent(None)
+
+        if text == 'Word':
+            self.radioWidget = RadioSelectWidget('Desired measure:', OrderedDict([
+            ('Word Mean Duration', 'word_mean_duration'),
+            ('Word Median Duration', 'word_median'),
+            ('Word Standard Deviation','word_std_dev'),
+            ('Baseline Duration', 'baseline_duration')]))
+
+        if text == 'Phone':
+            self.radioWidget = RadioSelectWidget('Desired measure:', OrderedDict([('Phone Mean Duration','phone_mean'),
+            ('Phone Median Duration','phone_median'),
+            ('Phone Standard Deviation', 'phone_std_dev')]))
+        if text == "Syllable":
+            self.radioWidget = RadioSelectWidget('Desired measure:', OrderedDict([('Syllable Mean Duration', 'syllable_mean'),
+            ('Syllable Median Duration', 'syllable_median'),
+            ('Syllable Standard Deviation', 'syllable_std_dev')]))
+        if text == "Speaker":
+            self.radioWidget = RadioSelectWidget('Desired measure:', OrderedDict([('Mean Speech Rate', 'mean_speech_rate')]))
+
+        self.optionWidget.setParent(None)
+        layout.addWidget(self.optionWidget)
+        layout.addWidget(self.radioWidget)
+        self.layout().insertLayout(0, layout)
+
+
+
+
+    def value(self):
+        return self.radioWidget.value()
+
+class EnrichSpeakersDialog(BaseDialog):
+    def __init__(self, config, parent):
+        super(EnrichSpeakersDialog, self).__init__(parent)
+
+        layout = QtWidgets.QFormLayout()
+        self.layout().insertLayout(0, layout)
+
+        self.setWindowTitle('Enrich phones with features')
+        self.path = None
+
+    def accept(self):
+        self.path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select feature file", filter = "CSV (*.txt  *.csv)")
+        if not self.path:
+            return
+        QtWidgets.QDialog.accept(self)
+
+    def value(self):
+        return self.path
+
